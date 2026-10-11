@@ -1,0 +1,8 @@
+discord.py[voice]>=2.4.0
+yt-dlp[default,deno]>=2026.8.19
+python-dotenv>=1.0.1
+torch>=2.6
+transformers>=4.46,<5
+spotipy>=2.24.0
+wavelink>=3.3.0
+PyNaCl
