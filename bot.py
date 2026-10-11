@@ -149,7 +149,8 @@ FFMPEG_BEFORE_OPTIONS = (
     "-nostdin "
     "-reconnect 1 "
     "-reconnect_streamed 1 "
-    "-reconnect_delay_max 5"
+    "-reconnect_on_network_error 1 "
+    "-reconnect_delay_max 10"
 )
 
 FFMPEG_OPTIONS = "-vn"
@@ -1559,6 +1560,7 @@ class MusicPlayer:
                         "utf-8",
                         errors="replace",
                     ).strip()
+                    return_code = process.poll() if process is not None else None
                     if playback_error:
                         log.warning(
                             "Playback error for %s (%s): %s",
@@ -1567,10 +1569,16 @@ class MusicPlayer:
                             playback_error,
                         )
                     if stderr_text:
-                        log.warning(
-                            "FFmpeg stderr for %s (%s):\\n%s",
+                        log_method = (
+                            log.warning
+                            if playback_error or return_code != 0
+                            else log.debug
+                        )
+                        log_method(
+                            "FFmpeg stderr for %s (%s), return code %s:\\n%s",
                             track.title,
                             track.platform,
+                            return_code,
                             stderr_text,
                         )
                     self.bot.loop.call_soon_threadsafe(self.next_event.set)
