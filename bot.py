@@ -59,7 +59,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 LAVALINK_URL = os.getenv("LAVALINK_URL")
 LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
 LAVALINK_PORT = int(os.getenv("LAVALINK_PORT") or "2333")
-LAVALINK_NAME = os.getenv("LAVALINK_NAME", "music-bot-lavalink")
+LAVALINK_NAME = os.getenv("LAVALINK_NAME", "rh-army-lavalink")
 LAVALINK_ENABLED = (
     os.getenv("ENABLE_LAVALINK", "false").strip().lower() in {"1", "true", "yes", "on"}
     and bool(LAVALINK_URL and LAVALINK_PASSWORD)
@@ -81,12 +81,10 @@ FAVOURITES_FILE = os.path.join(os.path.dirname(__file__), "favourites.json")
 PLAYLISTS_FILE = os.path.join(os.path.dirname(__file__), "playlists.json")
 VOICE_SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "voice_settings.json")
 
-BOT_NAME = os.getenv("BOT_NAME", "Music Bot").strip() or "Music Bot"
-BOT_AUTHOR = (os.getenv("BOT_AUTHOR") or "").strip()  # optional credit shown in /about
-BOT_CREDIT_TEXT = os.getenv("BOT_CREDIT_TEXT", "A high-quality Discord music bot.")
+BOT_CREDIT_TEXT = "Made by Debraj. A high-quality music bot for RH ARMY."
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("music-bot")
+log = logging.getLogger("rh-army-music")
 TTS_MODEL_CACHE = {}
 TTS_SYNTHESIS_LOCK = Lock()
 PLAYER_EMOJI_CACHE: dict[int, dict[str, discord.PartialEmoji]] = {}
@@ -169,7 +167,7 @@ async def fetch_synced_lyrics(title: str, duration: Optional[int] = None):
     queries = list(dict.fromkeys((title, clean_title)))
 
     def fetch():
-        headers = {"User-Agent": "DiscordMusicBot/1.0"}
+        headers = {"User-Agent": "RHArmyMusicBot/1.0"}
         plain_lyrics = None
 
         for search_title in queries:
@@ -263,7 +261,11 @@ def spotify_kind_id(text: str):
 def trim(text: str, size: int = 80) -> str:
     if not text:
         return "Unknown"
-    return text if len(text) <= size else text[: size - 1] + "�"
+    if len(text) <= size:
+        return text
+    if size <= 3:
+        return text[:size]
+    return text[: size - 3] + "..."
 
 
 def escape(text: str) -> str:
@@ -786,7 +788,7 @@ async def make_audio_source(
     return source, stderr_capture
 
 
-class MusicBot(commands.Bot):
+class RHArmyMusicBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.guilds = True
@@ -875,7 +877,7 @@ class MusicBot(commands.Bot):
                         emoji = await guild.create_custom_emoji(
                             name=emoji_name,
                             image=asset_file.read(),
-                            reason=f"{BOT_NAME} player controls",
+                            reason="RH ARMY music player controls",
                         )
                 except (discord.Forbidden, discord.HTTPException, OSError) as exc:
                     log.warning(
@@ -913,7 +915,7 @@ class MusicBot(commands.Bot):
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.listening,
-                name=f"music | {BOT_NAME}",
+                name="RH ARMY music | by Debraj",
             )
         )
         for guild in self.guilds:
@@ -959,12 +961,12 @@ class MusicBot(commands.Bot):
             return
 
 
-bot = MusicBot()
+bot = RHArmyMusicBot()
 players = {}
 guild_likes: dict = {}
 
 class MusicPlayer:
-    def __init__(self, bot_instance: MusicBot, guild: discord.Guild):
+    def __init__(self, bot_instance: RHArmyMusicBot, guild: discord.Guild):
         self.bot = bot_instance
         self.guild = guild
         self.guild_id = guild.id
@@ -1057,7 +1059,7 @@ class MusicPlayer:
             raise RuntimeError("No synced lyrics were found for this song.")
 
         await self.stop_lyrics()
-        message = await channel.send("?? Loading lyrics...")
+        message = await channel.send("Loading lyrics...")
         self.lyrics_message = message
         self.lyrics_task = asyncio.create_task(
             self.update_lyrics(message, track, lyrics)
@@ -1085,7 +1087,7 @@ class MusicPlayer:
 
                 text = lyrics[line_index][1] or "..."
                 with contextlib.suppress(discord.NotFound, discord.HTTPException):
-                    await message.edit(content=f"?? {text}")
+                    await message.edit(content=f"{text}")
 
                 if line_index + 1 >= len(lyrics):
                     break
@@ -1335,7 +1337,7 @@ class MusicPlayer:
     def now_embed(self) -> discord.Embed:
         track = self.current
         cd_emoji = PLAYER_EMOJI_CACHE.get(self.guild_id, {}).get("cd")
-        title_icon = str(cd_emoji) if cd_emoji else "??"
+        title_icon = str(cd_emoji) if cd_emoji else ""
 
         embed = discord.Embed(
             title=f"{title_icon} Now Playing",
@@ -1364,19 +1366,18 @@ class MusicPlayer:
                 segments - 1,
                 int(position / duration * segments),
             )
-            playhead = ("?", "?")[int(time.monotonic() / 2) % 2]
             progress_bar = (
-                "?" * playhead_index
-                + playhead
-                + "?" * (segments - playhead_index - 1)
+                "=" * playhead_index
+                + ">"
+                + "-" * (segments - playhead_index - 1)
             )
             progress = (
                 f"`{format_duration(int(position))}`  {progress_bar}  "
                 f"`{format_duration(track.duration)}`"
             )
         else:
-            progress = f"?? LIVE � `{format_duration(int(position))}`"
-        embed.add_field(name="?? Progress", value=progress, inline=False)
+            progress = f"LIVE  |  `{format_duration(int(position))}`"
+        embed.add_field(name="Progress", value=progress, inline=False)
 
         embed.add_field(name="Source", value=track.platform, inline=True)
         embed.add_field(name="Requested by", value=track.requester_name, inline=True)
@@ -1384,7 +1385,7 @@ class MusicPlayer:
         embed.add_field(name="Queue", value=str(self.queue.qsize()), inline=True)
         track_key = get_track_key(track)
         likes = len(guild_likes.get(self.guild_id, {}).get(track_key or "", set())) if track_key else 0
-        embed.add_field(name="?? Likes", value=str(likes), inline=True)
+        embed.add_field(name="Likes", value=str(likes), inline=True)
 
         if track.thumbnail:
             embed.set_thumbnail(url=track.thumbnail)
@@ -1394,7 +1395,7 @@ class MusicPlayer:
 
     def queue_embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title=f"🎶 {BOT_NAME} Queue",
+            title="RH ARMY Music Queue",
             color=discord.Color.red(),
         )
 
@@ -1423,7 +1424,7 @@ class MusicPlayer:
             embed.description = "\n".join(lines)
 
         embed.set_footer(
-            text=f"Autoplay: {'ON' if self.autoplay else 'OFF'} � {BOT_CREDIT_TEXT}"
+            text=f"Autoplay: {'ON' if self.autoplay else 'OFF'}  |  {BOT_CREDIT_TEXT}"
         )
         return embed
 
@@ -1483,7 +1484,7 @@ class MusicPlayer:
                         )
 
                 except asyncio.TimeoutError:
-                    await self.send_text("?? Left voice because I was idle.")
+                    await self.send_text("Left voice because I was idle.")
                     await self.disconnect()
                     break
 
@@ -1759,12 +1760,12 @@ class MusicPlayer:
 
     def audio_effects_embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title="??? Audio Effects Studio",
+            title="Audio Effects Studio",
             description=(
                 f"**Preset:** {self.effect_preset}\n"
-                f"**Bass Boost:** {self.bass_boost}x  �  "
-                f"**Speed:** {self.speed:.1f}x  �  "
-                f"**Pitch:** {self.pitch:.1f}x  �  "
+                f"**Bass Boost:** {self.bass_boost}x   |   "
+                f"**Speed:** {self.speed:.1f}x   |   "
+                f"**Pitch:** {self.pitch:.1f}x   |   "
                 f"**Reverb:** {'On' if self.reverb else 'Off'}\n\n"
                 "Effects apply live. The stream briefly restarts at the current position."
             ),
@@ -1785,16 +1786,16 @@ class MusicPlayer:
             if track.webpage_url and is_url(track.webpage_url):
                 title = f"[{title}]({track.webpage_url})"
             lines.append(
-                f"`{index}.` **{title}** � `{format_duration(track.duration)}`"
+                f"`{index}.` **{title}**  |  `{format_duration(track.duration)}`"
             )
 
         embed = discord.Embed(
-            title="?? Play History",
+            title="Play History",
             description="\n".join(lines) if lines else "No tracks played this session yet.",
             color=discord.Color.blurple(),
         )
         total_pages = max(1, (len(recent_tracks) + page_size - 1) // page_size)
-        embed.set_footer(text=f"Page {page + 1}/{total_pages} � This session")
+        embed.set_footer(text=f"Page {page + 1}/{total_pages}  |  This session")
         return embed
 
 
@@ -1913,7 +1914,7 @@ def _synthesize_bengali_audio(text: str, settings: dict) -> str:
             .tobytes()
         )
         with tempfile.NamedTemporaryFile(
-            suffix=".wav", prefix="music-bot-bengali-", delete=False
+            suffix=".wav", prefix="rh-army-bengali-", delete=False
         ) as audio_file:
             audio_path = audio_file.name
 
@@ -2065,14 +2066,14 @@ class MusicControls(discord.ui.View):
 
         if player and player.voice and player.voice.is_paused():
             self.pause_resume.label = "Play"
-            self.pause_resume.emoji = emoji_map.get("play", "??")
+            self.pause_resume.emoji = emoji_map.get("play", "")
         else:
             self.pause_resume.label = "Pause"
-            self.pause_resume.emoji = emoji_map.get("pause", "??")
+            self.pause_resume.emoji = emoji_map.get("pause", "")
 
-        self.repeat.emoji = emoji_map.get("repeat", "??")
-        self.shuffle.emoji = emoji_map.get("shuffle", "??")
-        self.lyrics.emoji = emoji_map.get("music", "??")
+        self.repeat.emoji = emoji_map.get("repeat", "")
+        self.shuffle.emoji = emoji_map.get("shuffle", "")
+        self.lyrics.emoji = emoji_map.get("music", "")
 
         if player and player.autoplay:
             self.autoplay.label = "Autoplay: ON"
@@ -2106,45 +2107,45 @@ class MusicControls(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="- Bass", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="- Bass", style=discord.ButtonStyle.secondary)
     async def bass_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.apply_eq(interaction, bass_delta=-1.0, treble_delta=0.0)
 
-    @discord.ui.button(label="+ Bass", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="+ Bass", style=discord.ButtonStyle.secondary)
     async def bass_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.apply_eq(interaction, bass_delta=1.0, treble_delta=0.0)
 
-    @discord.ui.button(label="- Treble", emoji="???", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="- Treble", style=discord.ButtonStyle.secondary)
     async def treble_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.apply_eq(interaction, bass_delta=0.0, treble_delta=-1.0)
 
-    @discord.ui.button(label="+ Treble", emoji="???", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="+ Treble", style=discord.ButtonStyle.secondary)
     async def treble_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.apply_eq(interaction, bass_delta=0.0, treble_delta=1.0)
 
-    @discord.ui.button(label="Reset EQ", emoji="??", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Reset EQ", style=discord.ButtonStyle.danger)
     async def reset_eq(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.apply_eq(interaction, bass_delta=0.0, treble_delta=0.0, reset=True)
 
-    @discord.ui.button(label="- Vol", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="- Vol", style=discord.ButtonStyle.secondary)
     async def volume_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
             return
 
         player.set_volume(player.volume - 0.1)
-        await interaction.response.send_message(f"?? Volume: {player.volume:.1f}x", ephemeral=True)
+        await interaction.response.send_message(f"Volume: {player.volume:.1f}x", ephemeral=True)
 
-    @discord.ui.button(label="+ Vol", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="+ Vol", style=discord.ButtonStyle.secondary)
     async def volume_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
             return
 
         player.set_volume(player.volume + 0.1)
-        await interaction.response.send_message(f"?? Volume: {player.volume:.1f}x", ephemeral=True)
+        await interaction.response.send_message(f"Volume: {player.volume:.1f}x", ephemeral=True)
 
-    @discord.ui.button(label="Repeat: OFF", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Repeat: OFF", style=discord.ButtonStyle.secondary)
     async def repeat(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
@@ -2153,9 +2154,9 @@ class MusicControls(discord.ui.View):
         mode = player.cycle_repeat_mode()
         self.update_buttons()
         await interaction.response.edit_message(view=self)
-        await interaction.followup.send(f"?? Repeat mode: {mode.upper()}", ephemeral=True)
+        await interaction.followup.send(f"Repeat mode: {mode.upper()}", ephemeral=True)
 
-    @discord.ui.button(label="Shuffle", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Shuffle", style=discord.ButtonStyle.secondary)
     async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
@@ -2167,7 +2168,7 @@ class MusicControls(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Lyrics", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Lyrics", style=discord.ButtonStyle.secondary)
     async def lyrics(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
@@ -2177,12 +2178,12 @@ class MusicControls(discord.ui.View):
         try:
             await player.start_lyrics(interaction.channel)
             await interaction.followup.send(
-                "?? Live lyrics started in this channel.", ephemeral=True
+                "Live lyrics started in this channel.", ephemeral=True
             )
         except Exception as exc:
             await log_interaction_error(interaction, exc, "Could not start lyrics")
 
-    @discord.ui.button(label="Pause", emoji="??", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Pause", style=discord.ButtonStyle.primary)
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
@@ -2196,16 +2197,16 @@ class MusicControls(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Skip", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Skip", style=discord.ButtonStyle.secondary)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
             return
 
         await player.skip()
-        await interaction.response.send_message("?? Skipped.", ephemeral=True)
+        await interaction.response.send_message("Skipped.", ephemeral=True)
 
-    @discord.ui.button(label="Stop", emoji="??", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Stop", style=discord.ButtonStyle.danger)
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
@@ -2216,9 +2217,9 @@ class MusicControls(discord.ui.View):
         for child in self.children:
             child.disabled = True
 
-        await interaction.response.edit_message(content="?? Stopped and left voice.", view=self)
+        await interaction.response.edit_message(content="Stopped and left voice.", view=self)
 
-    @discord.ui.button(label="Autoplay: OFF", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Autoplay: OFF", style=discord.ButtonStyle.secondary)
     async def autoplay(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = await self.guard(interaction)
         if not player:
@@ -2228,7 +2229,7 @@ class MusicControls(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Queue", emoji="??", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Queue", style=discord.ButtonStyle.secondary)
     async def queue(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.get_player()
 
@@ -2238,7 +2239,7 @@ class MusicControls(discord.ui.View):
 
         await interaction.response.send_message(embed=player.queue_embed(), ephemeral=True)
 
-    @discord.ui.button(label="Like", emoji="??", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Like", style=discord.ButtonStyle.danger)
     async def like(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.get_player()
         if not player or not player.current:
@@ -2246,7 +2247,7 @@ class MusicControls(discord.ui.View):
             return
         liked = toggle_track_like(self.guild_id, player.current, interaction.user.id)
         await player.send_now_playing()
-        msg = "?? Liked" if liked else "?? Unliked"
+        msg = "Liked" if liked else "Unliked"
         await interaction.response.send_message(msg, ephemeral=True)
 
 
@@ -2278,9 +2279,7 @@ class PlayHistoryView(discord.ui.View):
         self.next_page.disabled = self.page >= total_pages - 1
 
     @discord.ui.button(
-        label="Previous",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Previous", style=discord.ButtonStyle.secondary,
     )
     async def previous_page(
         self,
@@ -2296,9 +2295,7 @@ class PlayHistoryView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Next",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Next", style=discord.ButtonStyle.secondary,
     )
     async def next_page(
         self,
@@ -2318,9 +2315,7 @@ class PlayHistoryView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Close",
-        emoji="??",
-        style=discord.ButtonStyle.danger,
+        label="Close", style=discord.ButtonStyle.danger,
     )
     async def close(
         self,
@@ -2383,9 +2378,7 @@ class AudioEffectsStudio(discord.ui.View):
         await player.send_now_playing()
 
     @discord.ui.button(
-        label="Bass -",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Bass -", style=discord.ButtonStyle.secondary,
         row=0,
     )
     async def bass_down(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2397,9 +2390,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Bass +",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Bass +", style=discord.ButtonStyle.secondary,
         row=0,
     )
     async def bass_up(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2411,9 +2402,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Speed -",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Speed -", style=discord.ButtonStyle.secondary,
         row=1,
     )
     async def speed_down(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2425,9 +2414,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Speed +",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Speed +", style=discord.ButtonStyle.secondary,
         row=1,
     )
     async def speed_up(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2439,9 +2426,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Pitch -",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Pitch -", style=discord.ButtonStyle.secondary,
         row=2,
     )
     async def pitch_down(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2453,9 +2438,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Pitch +",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Pitch +", style=discord.ButtonStyle.secondary,
         row=2,
     )
     async def pitch_up(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2467,9 +2450,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Nightcore",
-        emoji="?",
-        style=discord.ButtonStyle.success,
+        label="Nightcore", style=discord.ButtonStyle.success,
         row=3,
     )
     async def nightcore(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2483,9 +2464,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Slowed + Reverb",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Slowed + Reverb", style=discord.ButtonStyle.secondary,
         row=3,
     )
     async def slowed_reverb(
@@ -2503,9 +2482,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Reverb: OFF",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Reverb: OFF", style=discord.ButtonStyle.secondary,
         row=3,
     )
     async def reverb(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2517,9 +2494,7 @@ class AudioEffectsStudio(discord.ui.View):
         await self.refresh(interaction, player)
 
     @discord.ui.button(
-        label="Reset Effects",
-        emoji="??",
-        style=discord.ButtonStyle.danger,
+        label="Reset Effects", style=discord.ButtonStyle.danger,
         row=4,
     )
     async def reset_effects(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2562,7 +2537,7 @@ class CompactMusicControls(discord.ui.View):
         self.pause_resume.label = "Play" if paused else "Pause"
         self.pause_resume.emoji = emoji_map.get(
             "play" if paused else "pause",
-            "??" if paused else "??",
+            "" if paused else "",
         )
         if player:
             self.repeat.label = (
@@ -2570,9 +2545,9 @@ class CompactMusicControls(discord.ui.View):
                 if player.repeat_mode != "off"
                 else "Repeat"
             )
-            self.repeat.emoji = emoji_map.get("repeat", "??")
+            self.repeat.emoji = emoji_map.get("repeat", "")
 
-    @discord.ui.button(label="Like", emoji="??", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(label="Like", style=discord.ButtonStyle.secondary, row=0)
     async def like(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.get_player()
         if not player or not player.current:
@@ -2590,11 +2565,11 @@ class CompactMusicControls(discord.ui.View):
         await interaction.response.defer()
         await player.send_now_playing()
         await interaction.followup.send(
-            "?? Liked this track." if liked else "?? Removed your like.",
+            "Liked this track." if liked else "Removed your like.",
             ephemeral=True,
         )
 
-    @discord.ui.button(label="Pause", emoji="??", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Pause", style=discord.ButtonStyle.primary, row=0)
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.get_player()
         if not player or not player.voice or not player.current:
@@ -2613,7 +2588,7 @@ class CompactMusicControls(discord.ui.View):
         elif player.voice.is_playing():
             await player.pause()
 
-    @discord.ui.button(label="Repeat", emoji="??", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(label="Repeat", style=discord.ButtonStyle.secondary, row=0)
     async def repeat(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = self.get_player()
         if not player or not player.voice or not player.current:
@@ -2631,9 +2606,7 @@ class CompactMusicControls(discord.ui.View):
         await player.send_now_playing()
 
     @discord.ui.button(
-        label="Open music controls",
-        emoji="???",
-        style=discord.ButtonStyle.secondary,
+        label="Open music controls", style=discord.ButtonStyle.secondary,
         row=1,
     )
     async def open_controls(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2656,9 +2629,7 @@ class CompactMusicControls(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Audio Effects",
-        emoji="?",
-        style=discord.ButtonStyle.secondary,
+        label="Audio Effects", style=discord.ButtonStyle.secondary,
         row=1,
     )
     async def open_audio_effects(
@@ -2685,9 +2656,7 @@ class CompactMusicControls(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Play History",
-        emoji="??",
-        style=discord.ButtonStyle.secondary,
+        label="Play History", style=discord.ButtonStyle.secondary,
         row=1,
     )
     async def open_play_history(
@@ -2792,7 +2761,7 @@ async def leave(interaction: discord.Interaction):
         return
 
     await player.stop()
-    await interaction.followup.send("?? Left voice.", ephemeral=True)
+    await interaction.followup.send("Left voice.", ephemeral=True)
 
 
 @bot.tree.command(name="skip", description="Skip the current song.")
@@ -2814,7 +2783,7 @@ async def skip(interaction: discord.Interaction):
         return
 
     await player.skip()
-    await interaction.followup.send("?? Skipped.", ephemeral=True)
+    await interaction.followup.send("Skipped.", ephemeral=True)
 
 
 @bot.tree.command(name="pause", description="Pause the current song.")
@@ -2833,7 +2802,7 @@ async def pause(interaction: discord.Interaction):
         return
 
     await player.pause()
-    await interaction.followup.send("?? Paused.", ephemeral=True)
+    await interaction.followup.send("Paused.", ephemeral=True)
 
 
 @bot.tree.command(name="resume", description="Resume paused music.")
@@ -2852,7 +2821,7 @@ async def resume(interaction: discord.Interaction):
         return
 
     await player.resume()
-    await interaction.followup.send("?? Resumed.", ephemeral=True)
+    await interaction.followup.send("Resumed.", ephemeral=True)
 
 
 @bot.tree.command(name="stop", description="Stop music, clear queue, and leave voice.")
@@ -2867,7 +2836,7 @@ async def stop(interaction: discord.Interaction):
         return
 
     await player.stop()
-    await interaction.followup.send("?? Stopped, cleared queue, and left voice.", ephemeral=True)
+    await interaction.followup.send("Stopped, cleared queue, and left voice.", ephemeral=True)
 
 
 @bot.tree.command(name="clear", description="Clear the music queue.")
@@ -2880,7 +2849,7 @@ async def clear(interaction: discord.Interaction):
         return
 
     count = player.clear_queue()
-    await interaction.response.send_message(f"?? Cleared **{count}** queued tracks.", ephemeral=True)
+    await interaction.response.send_message(f"Cleared **{count}** queued tracks.", ephemeral=True)
 
 
 @bot.tree.command(name="queue", description="Show the current queue.")
@@ -2916,7 +2885,7 @@ async def autoplay(interaction: discord.Interaction, enabled: Optional[bool] = N
         player.autoplay = enabled
 
     await interaction.response.send_message(
-        f"?? Autoplay is now **{'ON' if player.autoplay else 'OFF'}**.",
+        f"Autoplay is now **{'ON' if player.autoplay else 'OFF'}**.",
         ephemeral=True,
     )
 
@@ -2932,7 +2901,7 @@ async def volume_command(interaction: discord.Interaction, amount: float):
         return
 
     player.set_volume(amount)
-    await interaction.response.send_message(f"?? Volume set to {player.volume:.1f}x", ephemeral=True)
+    await interaction.response.send_message(f"Volume set to {player.volume:.1f}x", ephemeral=True)
 
 
 @bot.tree.command(name="repeat", description="Cycle repeat mode: off, track, queue.")
@@ -2945,7 +2914,7 @@ async def repeat_command(interaction: discord.Interaction):
         return
 
     mode = player.cycle_repeat_mode()
-    await interaction.response.send_message(f"?? Repeat mode: {mode.upper()}", ephemeral=True)
+    await interaction.response.send_message(f"Repeat mode: {mode.upper()}", ephemeral=True)
 
 
 @bot.tree.command(name="shuffle", description="Shuffle the current queue.")
@@ -2958,7 +2927,7 @@ async def shuffle_command(interaction: discord.Interaction):
         return
 
     await player.shuffle_queue()
-    await interaction.response.send_message("?? Queue shuffled.", ephemeral=True)
+    await interaction.response.send_message("Queue shuffled.", ephemeral=True)
 
 
 @bot.tree.command(
@@ -2994,7 +2963,7 @@ async def reset_command(interaction: discord.Interaction):
 @app_commands.guild_only()
 async def say_command(interaction: discord.Interaction, text: str):
     await interaction.response.send_message(
-        "??? Connecting and preparing your speech�",
+        "Connecting and preparing your speech | ",
         ephemeral=True,
     )
     player = get_player(interaction.guild)
@@ -3012,7 +2981,7 @@ async def say_command(interaction: discord.Interaction, text: str):
         await log_interaction_error(interaction, exc, "Text-to-speech command failed")
         return
     await interaction.edit_original_response(
-        content="??? Speech added to the voice queue."
+        content="Speech added to the voice queue."
     )
 
 
@@ -3108,7 +3077,7 @@ async def voice_settings(
         for key, value in values.items()
     ):
         await interaction.response.send_message(
-            "Volume must be 0.1�2.0, speed 0.5�2.0, and voice variation 0.0�1.5.",
+            "Volume must be 0.1 | 2.0, speed 0.5 | 2.0, and voice variation 0.0 | 1.5.",
             ephemeral=True,
         )
         return
@@ -3163,7 +3132,7 @@ async def phrase_play(interaction: discord.Interaction, name: str):
         await interaction.response.send_message("No saved phrase with that name.", ephemeral=True)
         return
     await interaction.response.send_message(
-        "??? Connecting and preparing your phrase�",
+        "?Connecting and preparing your phrase | ",
         ephemeral=True,
     )
     player = get_player(interaction.guild)
@@ -3181,7 +3150,7 @@ async def phrase_play(interaction: discord.Interaction, name: str):
         await log_interaction_error(interaction, exc, "Phrase speech command failed")
         return
     await interaction.edit_original_response(
-        content=f"??? Phrase `{escape(name.strip())}` added to the voice queue."
+        content=f"?Phrase `{escape(name.strip())}` added to the voice queue."
     )
 
 
@@ -3193,7 +3162,7 @@ async def phrase_delete(interaction: discord.Interaction, name: str):
         await interaction.response.send_message("No saved phrase with that name.", ephemeral=True)
         return
     _save_voice_config(interaction.guild_id, config)
-    await interaction.response.send_message("??? Phrase deleted.", ephemeral=True)
+    await interaction.response.send_message("Phrase deleted.", ephemeral=True)
 
 
 @phrase_group.command(name="list", description="List your saved phrases.")
@@ -3205,23 +3174,22 @@ async def phrase_list(interaction: discord.Interaction):
     listed_names = sorted(phrases)[:25]
     names = ", ".join(f"`{escape(name)}`" for name in listed_names)
     if len(phrases) > len(listed_names):
-        names += f"\n�and {len(phrases) - len(listed_names)} more."
+        names += f"\n | and {len(phrases) - len(listed_names)} more."
     await interaction.response.send_message(f"Saved phrases: {names}", ephemeral=True)
 
 
-@bot.tree.command(name="about", description="About this music bot.")
+@bot.tree.command(name="about", description="About the RH ARMY music bot.")
 async def about(interaction: discord.Interaction):
     embed = discord.Embed(
-        title=BOT_NAME,
+        title="RH ARMY Music Bot",
         description=BOT_CREDIT_TEXT,
         color=discord.Color.red(),
     )
 
-    if BOT_AUTHOR:
-        embed.add_field(name="Credit", value=BOT_AUTHOR, inline=True)
+    embed.add_field(name="Credit", value="Debraj", inline=True)
     embed.add_field(name="Default source", value="YouTube search", inline=True)
     embed.add_field(name="Supports", value="YouTube, Spotify metadata, yt-dlp URLs, files", inline=False)
-    embed.set_footer(text=f"{BOT_NAME} - Credit to {BOT_AUTHOR}" if BOT_AUTHOR else BOT_NAME)
+    embed.set_footer(text="RH ARMY  |  Music Bot  |  Credit to Debraj")
 
     await interaction.response.send_message(embed=embed)
 
@@ -3260,7 +3228,7 @@ if __name__ == "__main__":
         # Prevent duplicates by query
         if any(f.get("query") == entry["query"] for f in favs):
             await interaction.response.send_message(
-                f"?? **{escape(trim(track.title, 60))}** is already in your favourites.",
+                f"**{escape(trim(track.title, 60))}** is already in your favourites.",
                 ephemeral=True,
             )
             return
@@ -3268,7 +3236,7 @@ if __name__ == "__main__":
         data[uid] = favs
         _save_json(FAVOURITES_FILE, data)
         await interaction.response.send_message(
-            f"?? Added **{escape(trim(track.title, 60))}** to your favourites.",
+            f"Added **{escape(trim(track.title, 60))}** to your favourites.",
             ephemeral=True,
         )
 
@@ -3290,7 +3258,7 @@ if __name__ == "__main__":
         data[uid] = favs
         _save_json(FAVOURITES_FILE, data)
         await interaction.response.send_message(
-            f"??? Removed **{escape(trim(removed.get('title', 'Unknown'), 60))}** from favourites.",
+            f"?Removed **{escape(trim(removed.get('title', 'Unknown'), 60))}** from favourites.",
             ephemeral=True,
         )
 
@@ -3303,7 +3271,7 @@ if __name__ == "__main__":
             await interaction.response.send_message("Your favourites list is empty.", ephemeral=True)
             return
         embed = discord.Embed(
-            title=f"?? {interaction.user.display_name}'s Favourites",
+            title=f"{interaction.user.display_name}'s Favourites",
             color=discord.Color.red(),
         )
         lines = []
@@ -3314,7 +3282,7 @@ if __name__ == "__main__":
         if len(favs) > 25:
             lines.append(f"...and **{len(favs) - 25}** more.")
         embed.description = "\n".join(lines)
-        embed.set_footer(text=f"{len(favs)}/50 favourites � {BOT_CREDIT_TEXT}")
+        embed.set_footer(text=f"{len(favs)}/50 favourites  |  {BOT_CREDIT_TEXT}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @favourite_group.command(name="play", description="Play a song from your favourites.")
@@ -3344,7 +3312,7 @@ if __name__ == "__main__":
         await player.queue.put(track)
         player.start()
         await interaction.edit_original_response(
-            content=f"?? Playing favourite: **{escape(trim(track.title, 80))}**"
+            content=f"Playing favourite: **{escape(trim(track.title, 80))}**"
         )
 
     # -- Playlist commands -------------------------------------------------------
@@ -3382,7 +3350,7 @@ if __name__ == "__main__":
         data[uid] = user_playlists
         _save_json(PLAYLISTS_FILE, data)
         await interaction.response.send_message(
-            f"?? Saved **{len(tracks_to_save)}** tracks as playlist **{escape(name)}**.",
+            f"Saved **{len(tracks_to_save)}** tracks as playlist **{escape(name)}**.",
             ephemeral=True,
         )
 
@@ -3410,7 +3378,7 @@ if __name__ == "__main__":
         await player.enqueue_many(tracks)
         player.start()
         await interaction.edit_original_response(
-            content=f"?? Loaded **{len(tracks)}** tracks from playlist **{escape(name)}**."
+            content=f"Loaded **{len(tracks)}** tracks from playlist **{escape(name)}**."
         )
 
     @playlist_group.command(name="delete", description="Delete a saved playlist.")
@@ -3428,7 +3396,7 @@ if __name__ == "__main__":
         data[uid] = user_playlists
         _save_json(PLAYLISTS_FILE, data)
         await interaction.response.send_message(
-            f"??? Deleted playlist **{escape(name)}**.", ephemeral=True
+            f"Deleted playlist **{escape(name)}**.", ephemeral=True
         )
 
     @playlist_group.command(name="list", description="List all your saved playlists.")
@@ -3440,14 +3408,14 @@ if __name__ == "__main__":
             await interaction.response.send_message("You have no saved playlists.", ephemeral=True)
             return
         embed = discord.Embed(
-            title=f"?? {interaction.user.display_name}'s Playlists",
+            title=f"{interaction.user.display_name}'s Playlists",
             color=discord.Color.blurple(),
         )
         lines = []
         for i, (pname, ptracks) in enumerate(user_playlists.items(), start=1):
-            lines.append(f"`{i}.` **{escape(pname)}** � {len(ptracks)} tracks")
+            lines.append(f"`{i}.` **{escape(pname)}**  |  {len(ptracks)} tracks")
         embed.description = "\n".join(lines)
-        embed.set_footer(text=f"{len(user_playlists)}/20 playlists � {BOT_CREDIT_TEXT}")
+        embed.set_footer(text=f"{len(user_playlists)}/20 playlists  |  {BOT_CREDIT_TEXT}")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # -- Queue management commands -----------------------------------------------
@@ -3474,7 +3442,7 @@ if __name__ == "__main__":
         for t in items:
             await player.queue.put(t)
         await interaction.response.send_message(
-            f"??? Removed `#{position}` **{escape(trim(removed.title, 60))}** from the queue.",
+            f"?Removed `#{position}` **{escape(trim(removed.title, 60))}** from the queue.",
             ephemeral=True,
         )
 
@@ -3508,7 +3476,7 @@ if __name__ == "__main__":
         for t in items:
             await player.queue.put(t)
         await interaction.response.send_message(
-            f"?? Moved **{escape(trim(track.title, 60))}** from position {from_pos} to {to_pos}.",
+            f"Moved **{escape(trim(track.title, 60))}** from position {from_pos} to {to_pos}.",
             ephemeral=True,
         )
 
